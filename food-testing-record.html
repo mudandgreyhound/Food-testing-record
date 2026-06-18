@@ -85,6 +85,7 @@ textarea.inp{resize:vertical;min-height:70px}
 .sc.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .sc.on.lo{background:var(--red);border-color:var(--red)}
 .sc.on.mid{background:var(--amber);border-color:var(--amber)}
+.critnote{margin-top:9px;padding:8px 11px;font-size:13px;background:var(--card)}
 
 /* total bar */
 .totbar{position:sticky;bottom:0;z-index:40;background:var(--card);border:1px solid var(--line);
@@ -182,7 +183,7 @@ textarea.inp{resize:vertical;min-height:70px}
     <div class="card">
       <h3><span class="pip"></span>ข้อมูลการทดสอบ</h3>
       <div class="grid2">
-        <div><label class="fl">รายการ / เมนู *</label><input class="inp" id="f_menu" placeholder="เช่น แกงจืดเงาะยัดไส้หมูสับ"></div>
+        <div><label class="fl">รายการ / เมนู *</label><input class="inp" id="f_menu" placeholder="เช่น ปีกไก่ทอดน้ำปลา"></div>
         <div><label class="fl">สถานที่ / สาขา *</label><input class="inp" id="f_branch" placeholder="เช่น EMQ" list="branchList"><datalist id="branchList"></datalist></div>
         <div><label class="fl">ผู้เข้าทดสอบ</label><input class="inp" id="f_tester" placeholder="ชื่อผู้เข้าทดสอบ"></div>
         <div><label class="fl">วันที่</label><input class="inp" type="date" id="f_date"></div>
@@ -317,7 +318,7 @@ function buildForm(){
     g.items.forEach(([k,nm,ds])=>{
       h+=`<div class="crit" data-k="${k}"><div class="nm">${nm}</div><div class="ds">${ds}</div><div class="score">`;
       [5,4,3,2,1,0].forEach(s=>h+=`<button class="sc" data-s="${s}">${s}</button>`);
-      h+=`</div></div>`;
+      h+=`</div><input class="inp critnote" placeholder="หมายเหตุหัวข้อนี้ (ถ้ามี)"></div>`;
     });
   });
   $('#critWrap').innerHTML=h;
@@ -335,6 +336,7 @@ function setScore(crit,s){
   });
 }
 function getScores(){const o={};$$('#critWrap .crit').forEach(c=>o[c.dataset.k]=+c.dataset.val);return o;}
+function getNotes(){const o={};$$('#critWrap .crit').forEach(c=>{const v=c.querySelector('.critnote').value.trim();if(v)o[c.dataset.k]=v;});return o;}
 function calcTotal(){
   const sc=getScores();const tot=Object.values(sc).reduce((a,b)=>a+b,0);const p=pct(tot);
   $('#totVal').textContent=tot;$('#totPct').textContent=p+'%';
@@ -370,7 +372,7 @@ async function saveRecord(){
   const id=editingId||uid();
   const rec={id,date:$('#f_date').value||todayISO(),menu,branch,
     tester:$('#f_tester').value.trim(),eval:$('#f_eval').value.trim(),pos:$('#f_pos').value.trim(),
-    appr:$('#f_appr').value.trim(),scores:sc,total:tot,pct:pct(tot),
+    appr:$('#f_appr').value.trim(),scores:sc,notes:getNotes(),total:tot,pct:pct(tot),
     comment:$('#f_comment').value.trim(),hasImg:!!(pendingImg.t||pendingImg.a),
     createdAt:editingId?(records.find(r=>r.id===id)?.createdAt||Date.now()):Date.now()};
   records=records.filter(r=>r.id!==id);records.push(rec);
@@ -386,6 +388,7 @@ function resetForm(){
   ['f_menu','f_branch','f_tester','f_eval','f_pos','f_appr','f_comment'].forEach(i=>$('#'+i).value='');
   $('#f_date').value=todayISO();
   $$('#critWrap .crit').forEach(c=>setScore(c,5));calcTotal();
+  $$('#critWrap .critnote').forEach(n=>n.value='');
   setPhoto('t',null);setPhoto('a',null);
   $('#saveBtn').textContent='บันทึก';
 }
@@ -398,6 +401,7 @@ async function editRecord(id){
   $('#f_date').value=r.date;$('#f_eval').value=r.eval||'';$('#f_pos').value=r.pos||'';
   $('#f_appr').value=r.appr||'';$('#f_comment').value=r.comment||'';
   $$('#critWrap .crit').forEach(c=>setScore(c,r.scores[c.dataset.k]??5));calcTotal();
+  $$('#critWrap .crit').forEach(c=>c.querySelector('.critnote').value=(r.notes&&r.notes[c.dataset.k])||'');
   setPhoto('t',null);setPhoto('a',null);
   if(r.hasImg){const im=await Store.get(K_IMG(id));if(im){setPhoto('t',im.t);setPhoto('a',im.a);}}
   $('#saveBtn').textContent='อัปเดต';
@@ -444,7 +448,8 @@ async function openDetail(id){
     ${im.t?`<div><img src="${im.t}"><div class="cap">ต้นแบบ</div></div>`:''}
     ${im.a?`<div><img src="${im.a}"><div class="cap">จริง</div></div>`:''}</div>`;}}
   let rowsH='';GROUPS.forEach(g=>{rowsH+=`<tr><td colspan="2" style="font-weight:600;color:var(--accent);padding-top:10px">${g.label}</td></tr>`;
-    g.items.forEach(([k,nm])=>{const v=r.scores[k];rowsH+=`<tr><td>${nm}</td><td style="color:${v<=2?'var(--red)':v<=3?'var(--amber)':'var(--text)'}">${v}</td></tr>`;});});
+    g.items.forEach(([k,nm])=>{const v=r.scores[k];const nt=(r.notes&&r.notes[k])?`<div style="font-size:11.5px;color:var(--sub);margin-top:2px">↳ ${esc(r.notes[k])}</div>`:'';
+      rowsH+=`<tr><td>${nm}${nt}</td><td style="color:${v<=2?'var(--red)':v<=3?'var(--amber)':'var(--text)'}">${v}</td></tr>`;});});
   $('#sheet').innerHTML=`
     <h2>${esc(r.menu)}</h2>
     <div style="color:var(--sub);font-size:13px">${esc(r.branch)} · ${fmtThaiDate(r.date)}</div>
@@ -519,10 +524,13 @@ function renderSummary(){
 function exportCSV(){
   const m=$('#sum_month').value;const rows=records.filter(r=>monthKey(r.date)===m);
   if(!rows.length){toast('ไม่มีข้อมูลให้ส่งออก');return;}
-  const head=['วันที่','สาขา','เมนู','ผู้เข้าทดสอบ','ผู้ประเมิน',...ALL_ITEMS.map(i=>i[1]),'รวม','เปอร์เซ็นต์','Comments'];
+  const head=['วันที่','สาขา','เมนู','ผู้เข้าทดสอบ','ผู้ประเมิน',...ALL_ITEMS.map(i=>i[1]),'รวม','เปอร์เซ็นต์','หมายเหตุรายหัวข้อ','Comments'];
   const lines=[head];
-  rows.forEach(r=>lines.push([r.date,r.branch,r.menu,r.tester||'',r.eval||'',
-    ...ALL_ITEMS.map(i=>r.scores[i[0]]??''),r.total,r.pct+'%',(r.comment||'').replace(/\n/g,' ')]));
+  rows.forEach(r=>{
+    const itemNotes=ALL_ITEMS.filter(i=>r.notes&&r.notes[i[0]]).map(i=>`${i[1]}: ${r.notes[i[0]]}`).join(' | ');
+    lines.push([r.date,r.branch,r.menu,r.tester||'',r.eval||'',
+      ...ALL_ITEMS.map(i=>r.scores[i[0]]??''),r.total,r.pct+'%',itemNotes,(r.comment||'').replace(/\n/g,' ')]);
+  });
   const csv='\uFEFF'+lines.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   dl('FoodTesting_'+m+'.csv','data:text/csv;charset=utf-8,'+encodeURIComponent(csv));
 }
