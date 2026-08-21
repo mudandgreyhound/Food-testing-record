@@ -163,7 +163,7 @@ label.fl{display:block;font-size:12px;color:var(--sub);margin:0 0 4px 2px}
   <section class="view" id="v-report">
     <div class="card">
       <h3><span class="pip"></span>สรุปการทดสอบรายเดือน · แยกเป็นเมนู</h3>
-      <div class="searchbar"><select class="inp" id="rpMonth"></select></div>
+      <div class="searchbar"><select class="inp" id="rpMonth"></select><button class="btn sm" id="rpExport">⬇ Excel</button></div>
       <div id="rpKpi" class="rpkpi"></div>
     </div>
     <div class="card"><h3><span class="pip"></span>เมนู (เรียงคะแนนต่ำ → สูง)</h3><div id="rpList"><div class="empty">เลือกเดือน…</div></div></div>
@@ -172,6 +172,7 @@ label.fl{display:block;font-size:12px;color:var(--sub);margin:0 0 4px 2px}
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const API="https://foodtest.mobile1234.site", KEY="foodtest123";
 let TOKEN=sessionStorage.getItem('ft_admin_token')||"";
@@ -313,9 +314,11 @@ function fillRpMonths(){
   for(let i=0;i<12;i++){const ym=`${y}-${String(m).padStart(2,'0')}`;opts.push(`<option value="${ym}">${ymThai(ym)}</option>`);m--;if(m===0){m=12;y--;}}
   $('#rpMonth').innerHTML=opts.join('');
 }
+let rpData=null;
 async function loadReport(){
   const m=$('#rpMonth').value; if(!m)return;
   let s; try{ s=await api(`/api/admin/menu-summary?month=${m}`); }catch(e){ $('#rpList').innerHTML=`<div class="empty">${esc(e.message)}</div>`; return; }
+  rpData=s;
   const k=s.kpi||{}; const n=k.n||0; const avg=Math.round(k.avg_pct||0);
   $('#rpKpi').innerHTML=`
     <div class="rpk"><div class="v">${n}</div><div class="l">การทดสอบ</div></div>
@@ -357,6 +360,42 @@ async function toggleMenu(row){
   det.innerHTML=html; det.dataset.loaded='1';
 }
 
+async function exportReportXlsx(){
+  if(typeof XLSX==='undefined'){toast('โหลดไลบรารียังไม่เสร็จ ลองใหม่');return;}
+  if(!rpData||!rpData.menus||!rpData.menus.length){toast('ยังไม่มีข้อมูลให้ export');return;}
+  const m=rpData.month, k=rpData.kpi||{};
+  toast('กำลังสร้างไฟล์…');
+  const wb=XLSX.utils.book_new();
+  // 1) ภาพรวม
+  const ov=[['สรุปการทดสอบอาหาร (Food Testing Record)'],['เดือน',ymThai(m)],[],
+    ['จำนวนการทดสอบ',k.n||0],['จำนวนเมนู',k.n_menu||0],
+    ['คะแนนเฉลี่ยรวม (%)',Math.round(k.avg_pct||0)],['ผ่าน ≥80%',`${k.n_pass||0}/${k.n||0}`]];
+  const wo=XLSX.utils.aoa_to_sheet(ov); wo['!cols']=[{wch:24},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,wo,'ภาพรวม');
+  // 2) รายเมนู
+  const head=['เมนู','รหัสเมนู','จำนวนครั้ง','จำนวนสาขา','คะแนนเฉลี่ย','คะแนนเต็ม','% เฉลี่ย','ผ่าน','ต่ำสุด %'];
+  const rows=rpData.menus.map(x=>[x.menu_name,x.item_code,x.n_test,x.n_branch,+x.avg_score,+x.max_score,+x.avg_pct,x.n_pass,Math.round(x.min_pct)]);
+  const wm=XLSX.utils.aoa_to_sheet([head,...rows]);
+  wm['!cols']=[{wch:36},{wch:12},{wch:10},{wch:10},{wch:11},{wch:10},{wch:9},{wch:8},{wch:9}];
+  XLSX.utils.book_append_sheet(wb,wm,'รายเมนู');
+  // 3) รายหมวดต่อเมนู (ดึง detail แต่ละเมนู)
+  try{
+    const dets=await Promise.all(rpData.menus.map(x=>
+      api(`/api/admin/menu-detail?month=${m}&item_code=${encodeURIComponent(x.item_code)}`).then(d=>({x,d})).catch(()=>null)));
+    const cr=[['เมนู','หมวด','หัวข้อ','คะแนนเฉลี่ย','เต็ม','% เฉลี่ย']];
+    dets.filter(Boolean).forEach(({x,d})=>(d.by_criteria||[]).forEach(c=>cr.push([x.menu_name,c.grp,c.label,+c.avg_score,+c.max_score,+c.avg_pct])));
+    if(cr.length>1){const w=XLSX.utils.aoa_to_sheet(cr);w['!cols']=[{wch:34},{wch:20},{wch:22},{wch:11},{wch:8},{wch:9}];XLSX.utils.book_append_sheet(wb,w,'รายหมวดต่อเมนู');}
+  }catch(e){}
+  // 4) รายการทดสอบทั้งหมด
+  try{
+    const tests=await api(`/api/tests?month=${m}&limit=2000`);
+    const th=[['วันที่','สาขา','เมนู','ผู้ประเมิน','ผู้เข้าทดสอบ','คะแนน','เต็ม','%']];
+    (tests||[]).forEach(t=>th.push([(t.test_date||'').slice(0,10),t.shop_name,t.menu_name,t.chef_name,t.tester_name||'',t.total_score,t.max_score,Math.round(t.pct)]));
+    if(th.length>1){const w=XLSX.utils.aoa_to_sheet(th);w['!cols']=[{wch:12},{wch:22},{wch:32},{wch:18},{wch:16},{wch:8},{wch:7},{wch:6}];XLSX.utils.book_append_sheet(wb,w,'รายการทดสอบ');}
+  }catch(e){}
+  XLSX.writeFile(wb,`FoodTest_Summary_${m}.xlsx`);
+  toast('ดาวน์โหลดแล้ว ✓');
+}
 /* ---- nav / init ---- */
 function switchView(v){$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.v===v));$$('.view').forEach(s=>s.classList.toggle('active',s.id==='v-'+v));if(v==='report'&&!$('#rpMonth').value){fillRpMonths();}if(v==='report')loadReport();}
 function loadAll(){ loadMenuEnabled(); loadShops(); loadChefs(); loadCrit(); }
@@ -370,6 +409,7 @@ $('#menuSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchMenu();
 $('#shopSearch').oninput=renderShops; $('#shopReload').onclick=loadShops;
 $('#chefAddBtn').onclick=addChef; $('#critAddBtn').onclick=addCrit;
 $('#rpMonth').onchange=loadReport; fillRpMonths();
+$('#rpExport').onclick=exportReportXlsx;
 $('#logoutBtn').onclick=logout;
 $('#themeBtn').onclick=()=>setTheme(document.documentElement.dataset.t==='dark'?'light':'dark');
 setTheme(sessionStorage.getItem('ft_admin_theme')||'light');
