@@ -88,9 +88,9 @@ textarea.inp{resize:vertical;min-height:70px}
 .critnote{margin-top:9px;padding:8px 11px;font-size:13px;background:var(--card)}
 .ac-wrap{position:relative;display:block}
 .ac-list{position:absolute;top:100%;left:0;right:0;z-index:60;background:var(--card);
-  border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:260px;overflow:auto;
-  box-shadow:var(--shadow-lg);display:none}
-.ac-item{padding:11px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--line)}
+  border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:260px;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;box-shadow:var(--shadow-lg);display:none}
+.ac-item{padding:12px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--line)}
 .ac-item:last-child{border-bottom:none}
 .ac-item:active,.ac-item.sel{background:var(--accent-soft)}
 .ac-empty{padding:11px 13px;font-size:13px;color:var(--sub)}
@@ -453,38 +453,42 @@ async function loadRecords(){
 async function loadBranchesUI(){ /* ใช้ attachAutocomplete แทน datalist แล้ว */ }
 function setupMenuSearch(){ /* ใช้ attachAutocomplete แทน datalist แล้ว */ }
 /* ---- custom autocomplete (เสถียรบน iOS/iPad) ---- */
-function attachAutocomplete(input, fetchFn, minLen=0){
-  input.removeAttribute('list'); input.setAttribute('autocomplete','off');
+function attachAutocomplete(input, loadAll){
+  input.removeAttribute('list');
+  input.setAttribute('autocomplete','off'); input.setAttribute('autocorrect','off'); input.setAttribute('autocapitalize','off');
   const wrap=document.createElement('div'); wrap.className='ac-wrap';
   input.parentNode.insertBefore(wrap, input); wrap.appendChild(input);
   const list=document.createElement('div'); list.className='ac-list'; wrap.appendChild(list);
-  let t, items=[];
-  const hide=()=>{ list.style.display='none'; list.innerHTML=''; };
+  let all=null, items=[], open=false;
+  const hide=()=>{ list.style.display='none'; open=false; };
   function render(rows){
-    items=rows;
-    if(!rows.length){ list.innerHTML='<div class="ac-empty">ไม่พบรายการ</div>'; list.style.display='block'; return; }
-    list.innerHTML=rows.map((r,i)=>`<div class="ac-item" data-i="${i}">${esc(r.value)}</div>`).join('');
-    list.style.display='block';
+    items=rows.slice(0,300);
+    list.innerHTML = items.length
+      ? items.map((r,i)=>`<div class="ac-item" data-i="${i}">${esc(r.value)}</div>`).join('')
+      : '<div class="ac-empty">ไม่พบรายการ</div>';
+    list.style.display='block'; open=true;
     list.querySelectorAll('.ac-item').forEach(el=>{
-      const pick=ev=>{ ev.preventDefault(); const r=items[+el.dataset.i]; input.value=r.value; input.dataset.code=r.code||''; hide(); };
-      el.addEventListener('mousedown',pick); el.addEventListener('touchstart',pick,{passive:false});
+      el.addEventListener('click',()=>{ const r=items[+el.dataset.i]; input.value=r.value; input.dataset.code=r.code||''; hide(); });
     });
   }
-  async function query(q){ try{ render(await fetchFn(q)); }catch(e){ hide(); } }
-  input.addEventListener('focus',()=>query(''));          // แตะ = โชว์ทั้งหมดทันที
-  input.addEventListener('click',()=>{ if(list.style.display!=='block') query(input.value.trim()); });
-  input.addEventListener('input',()=>{
-    input.dataset.code=''; clearTimeout(t); const q=input.value.trim();
-    t=setTimeout(()=>query(q), 200);                       // q='' ก็โชว์ทั้งหมด
-  });
-  input.addEventListener('blur',()=>setTimeout(hide,180));
+  function show(){
+    if(all===null){ list.innerHTML='<div class="ac-empty">กำลังโหลด…</div>'; list.style.display='block'; open=true; return; }
+    const q=(input.value||'').trim().toLowerCase();
+    render(q ? all.filter(r=>r.value.toLowerCase().includes(q)) : all);
+  }
+  async function warm(){ if(all===null){ try{ all=await loadAll(); }catch(e){ all=[]; } } }
+  input.addEventListener('focus', async()=>{ show(); await warm(); show(); });
+  input.addEventListener('input', ()=>{ input.dataset.code=''; show(); });
+  // ปิดเฉพาะตอนแตะข้างนอก (ไม่ปิดตอน blur -> จิ้มรายการติดแน่นบน iOS)
+  document.addEventListener('pointerdown', e=>{ if(open && !wrap.contains(e.target)) hide(); });
+  warm(); // โหลดล่วงหน้าไว้เลย
 }
-async function fetchBranches(q){
-  const rows=await api(`/api/branches?q=${encodeURIComponent(q||'')}&limit=200`);
+async function loadAllBranches(){
+  const rows=await api('/api/branches?limit=1000');
   return rows.map(r=>({value:r.name, code:r.shop_code}));
 }
-async function fetchMenus(q){
-  const rows=await api(`/api/menus?q=${encodeURIComponent(q||'')}&limit=100`);
+async function loadAllMenus(){
+  const rows=await api('/api/menus?limit=1000');
   return rows.map(r=>({value:r.name, code:r.item_code}));
 }
 async function openDetailAPI(id){
@@ -1007,7 +1011,7 @@ async function init(){
   buildForm();$('#f_date').value=todayISO();
   injectIcons();
   await setTheme((await Store.get('ftr_theme'))||'light');
-  if(USE_API){ attachAutocomplete($('#f_branch'),fetchBranches,1); attachAutocomplete($('#f_menu'),fetchMenus,2); }
+  if(USE_API){ attachAutocomplete($('#f_branch'),loadAllBranches); attachAutocomplete($('#f_menu'),loadAllMenus); }
   else{ await seedUsers(); }
   await loadRecords();
   fillSelectors();
