@@ -256,8 +256,8 @@ textarea.inp{resize:vertical;min-height:70px}
     <div class="card">
       <h3><span class="pip"></span>ข้อมูลการทดสอบ</h3>
       <div class="grid2">
-        <div><label class="fl">รายการ / เมนู *</label><input class="inp" id="f_menu" placeholder="เช่น ปีกไก่ทอดน้ำปลา"></div>
-        <div><label class="fl">สถานที่ / สาขา *</label><input class="inp" id="f_branch" placeholder="เช่น EM-Emporium" list="branchList"><datalist id="branchList"></datalist></div>
+        <div><label class="fl">รายการ / เมนู *</label><input class="inp" id="f_menu" placeholder="เช่น แกงจืดเงาะยัดไส้หมูสับ"></div>
+        <div><label class="fl">สถานที่ / สาขา *</label><input class="inp" id="f_branch" placeholder="เช่น EMQ NARA" list="branchList"><datalist id="branchList"></datalist></div>
         <div><label class="fl">ผู้เข้าทดสอบ</label><input class="inp" id="f_tester" placeholder="ชื่อผู้เข้าทดสอบ"></div>
         <div><label class="fl">วันที่</label><input class="inp" type="date" id="f_date"></div>
         <div><label class="fl">ผู้ประเมิน</label><input class="inp" id="f_eval" placeholder="ชื่อผู้ประเมิน"></div>
@@ -340,7 +340,7 @@ textarea.inp{resize:vertical;min-height:70px}
   </section>
 
   <div class="note">
-    © 2026 Greyhound Café Co., Ltd. All Rights Reserved.<br>
+    💾 ข้อมูลถูกเก็บไว้ในเครื่องนี้ (เบราว์เซอร์) ใช้งานได้ทันทีโดยไม่ต้องมีเซิร์ฟเวอร์<br>
     <button class="btn ghost sm" id="backupBtn" style="margin-top:8px">📦 Backup ข้อมูล</button>
     <button class="btn ghost sm" id="restoreBtn" style="margin-top:8px">♻️ Restore</button>
     <input type="file" id="restoreFile" accept="application/json" hidden>
@@ -453,8 +453,8 @@ async function loadRecords(){
 async function loadBranchesUI(){ /* ใช้ attachAutocomplete แทน datalist แล้ว */ }
 function setupMenuSearch(){ /* ใช้ attachAutocomplete แทน datalist แล้ว */ }
 /* ---- custom autocomplete (เสถียรบน iOS/iPad) ---- */
-function attachAutocomplete(input, fetchFn, minLen=1){
-  input.removeAttribute('list');
+function attachAutocomplete(input, fetchFn, minLen=0){
+  input.removeAttribute('list'); input.setAttribute('autocomplete','off');
   const wrap=document.createElement('div'); wrap.className='ac-wrap';
   input.parentNode.insertBefore(wrap, input); wrap.appendChild(input);
   const list=document.createElement('div'); list.className='ac-list'; wrap.appendChild(list);
@@ -470,19 +470,21 @@ function attachAutocomplete(input, fetchFn, minLen=1){
       el.addEventListener('mousedown',pick); el.addEventListener('touchstart',pick,{passive:false});
     });
   }
+  async function query(q){ try{ render(await fetchFn(q)); }catch(e){ hide(); } }
+  input.addEventListener('focus',()=>query(''));          // แตะ = โชว์ทั้งหมดทันที
+  input.addEventListener('click',()=>{ if(list.style.display!=='block') query(input.value.trim()); });
   input.addEventListener('input',()=>{
     input.dataset.code=''; clearTimeout(t); const q=input.value.trim();
-    if(q.length<minLen){ hide(); return; }
-    t=setTimeout(async()=>{ try{ render(await fetchFn(q)); }catch(e){ hide(); } }, 250);
+    t=setTimeout(()=>query(q), 200);                       // q='' ก็โชว์ทั้งหมด
   });
   input.addEventListener('blur',()=>setTimeout(hide,180));
 }
 async function fetchBranches(q){
-  const rows=await api(`/api/branches?q=${encodeURIComponent(q)}&limit=20`);
+  const rows=await api(`/api/branches?q=${encodeURIComponent(q||'')}&limit=200`);
   return rows.map(r=>({value:r.name, code:r.shop_code}));
 }
 async function fetchMenus(q){
-  const rows=await api(`/api/menus?q=${encodeURIComponent(q)}&limit=20`);
+  const rows=await api(`/api/menus?q=${encodeURIComponent(q||'')}&limit=100`);
   return rows.map(r=>({value:r.name, code:r.item_code}));
 }
 async function openDetailAPI(id){
