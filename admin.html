@@ -210,8 +210,10 @@ function logout(){TOKEN='';sessionStorage.removeItem('ft_admin_token');showLogin
 
 /* ---- MENU ---- */
 async function searchMenu(){
-  const q=$('#menuSearch').value.trim(); if(q.length<2){toast('พิมพ์อย่างน้อย 2 ตัวอักษร');return;}
-  const rows=await api(`/api/admin/menus/search?q=${encodeURIComponent(q)}&limit=40`);
+  const q=$('#menuSearch').value.trim();
+  if(q.length<2){ $('#menuSearchRes').innerHTML='<div class="empty">พิมพ์อย่างน้อย 2 ตัวอักษร</div>'; return; }
+  $('#menuSearchRes').innerHTML='<div class="empty">กำลังค้นหา…</div>';
+  let rows; try{ rows=await api(`/api/admin/menus/search?q=${encodeURIComponent(q)}&limit=40`); }catch(e){ $('#menuSearchRes').innerHTML=`<div class="empty">${esc(e.message)}</div>`; return; }
   $('#menuSearchRes').innerHTML = rows.length? rows.map(r=>`
     <div class="row-item"><div class="nm">${esc(r.name)} <span class="s">${esc(r.item_code)}</span></div>
       ${r.enabled?'<span class="pill on">เปิดอยู่</span>':`<button class="btn sm" data-add="${esc(r.item_code)}">+ เพิ่ม</button>`}</div>`).join('')
@@ -405,6 +407,7 @@ $('#authBtn').onclick=doLogin;
 $('#a_pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 $$('.tab').forEach(t=>t.onclick=()=>switchView(t.dataset.v));
 $('#menuSearchBtn').onclick=searchMenu;
+let _msT; $('#menuSearch').addEventListener('input',()=>{ clearTimeout(_msT); _msT=setTimeout(searchMenu,300); });
 $('#menuSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchMenu();});
 $('#shopSearch').oninput=renderShops; $('#shopReload').onclick=loadShops;
 $('#chefAddBtn').onclick=addChef; $('#critAddBtn').onclick=addCrit;
