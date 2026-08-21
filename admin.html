@@ -53,6 +53,18 @@ label.fl{display:block;font-size:12px;color:var(--sub);margin:0 0 4px 2px}
 .pill.off{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
 .pill.role{background:var(--accent-soft);color:var(--accent)}
 .grp-h{font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;margin:14px 2px 6px}
+.rpkpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:6px}
+.rpk{background:var(--bg);border-radius:10px;padding:11px 13px}.rpk .v{font-size:22px;font-weight:700}.rpk .l{font-size:12px;color:var(--sub)}
+.mrow{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.mrow:last-child{border-bottom:none}.mrow .nm{flex:1;min-width:0}.mrow .nm .s{font-size:12px;color:var(--sub)}
+.mrow .pct{font-size:16px;font-weight:700;width:52px;text-align:right}
+.mrow .cv{color:var(--sub);transition:.2s}.mrow.open .cv{transform:rotate(90deg)}
+.mdet{padding:6px 2px 14px;border-bottom:1px solid var(--line)}
+.mbar{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:13px}
+.mbar .bl{width:150px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mbar .bt{flex:1;background:var(--bg);border-radius:4px;height:12px}.mbar .bf{height:100%;border-radius:4px}
+.mbar .bv{width:64px;text-align:right;font-weight:600}
+.mini{font-size:12px;color:var(--sub);margin:12px 0 4px 2px;font-weight:600}
 /* login */
 .auth{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
 .auth.hide{display:none}
@@ -89,6 +101,7 @@ label.fl{display:block;font-size:12px;color:var(--sub);margin:0 0 4px 2px}
     <button class="tab" data-v="shop">🏬 สาขา</button>
     <button class="tab" data-v="chef">👤 Area Chef</button>
     <button class="tab" data-v="crit">📋 เกณฑ์</button>
+    <button class="tab" data-v="report">📊 สรุป</button>
   </div></div>
 </div>
 
@@ -144,6 +157,16 @@ label.fl{display:block;font-size:12px;color:var(--sub);margin:0 0 4px 2px}
       <div class="empty" id="critWarn" style="padding:8px 2px;text-align:left;color:var(--sub)">⚠️ การเพิ่ม/ลบหัวข้อจะเปลี่ยนคะแนนเต็ม และมีผลกับฟอร์ม Area Chef ทันที</div>
     </div>
     <div class="card"><h3><span class="pip"></span>หัวข้อทั้งหมด</h3><div id="critList"><div class="empty">กำลังโหลด…</div></div></div>
+  </section>
+
+  <!-- REPORT -->
+  <section class="view" id="v-report">
+    <div class="card">
+      <h3><span class="pip"></span>สรุปการทดสอบรายเดือน · แยกเป็นเมนู</h3>
+      <div class="searchbar"><select class="inp" id="rpMonth"></select></div>
+      <div id="rpKpi" class="rpkpi"></div>
+    </div>
+    <div class="card"><h3><span class="pip"></span>เมนู (เรียงคะแนนต่ำ → สูง)</h3><div id="rpList"><div class="empty">เลือกเดือน…</div></div></div>
   </section>
 </div>
 
@@ -282,8 +305,60 @@ async function addCrit(){
   }catch(e){toast(e.message);}
 }
 
+/* ---- REPORT (สรุปเมนูรายเดือน) ---- */
+function colorFor(p){return p>=90?'var(--green)':p>=80?'#d97706':'var(--red)';}
+function ymThai(ym){const[y,m]=ym.split('-');const mn=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];return mn[+m]+' '+((+y)+543-2500);}
+function fillRpMonths(){
+  const d=new Date();let y=d.getFullYear(),m=d.getMonth()+1;const opts=[];
+  for(let i=0;i<12;i++){const ym=`${y}-${String(m).padStart(2,'0')}`;opts.push(`<option value="${ym}">${ymThai(ym)}</option>`);m--;if(m===0){m=12;y--;}}
+  $('#rpMonth').innerHTML=opts.join('');
+}
+async function loadReport(){
+  const m=$('#rpMonth').value; if(!m)return;
+  let s; try{ s=await api(`/api/admin/menu-summary?month=${m}`); }catch(e){ $('#rpList').innerHTML=`<div class="empty">${esc(e.message)}</div>`; return; }
+  const k=s.kpi||{}; const n=k.n||0; const avg=Math.round(k.avg_pct||0);
+  $('#rpKpi').innerHTML=`
+    <div class="rpk"><div class="v">${n}</div><div class="l">การทดสอบ</div></div>
+    <div class="rpk"><div class="v">${k.n_menu||0}</div><div class="l">เมนู</div></div>
+    <div class="rpk"><div class="v" style="color:${colorFor(avg)}">${avg}%</div><div class="l">เฉลี่ยรวม</div></div>
+    <div class="rpk"><div class="v">${k.n_pass||0}/${n}</div><div class="l">ผ่าน ≥80%</div></div>`;
+  if(!n){ $('#rpList').innerHTML='<div class="empty">ไม่มีข้อมูลในเดือนนี้</div>'; return; }
+  $('#rpList').innerHTML = s.menus.map(x=>{
+    const p=Math.round(x.avg_pct);
+    return `<div class="mrow" data-menu="${esc(x.item_code)}">
+      <span class="cv">▸</span>
+      <div class="nm">${esc(x.menu_name)}
+        <div class="s">ทดสอบ ${x.n_test} ครั้ง · ${x.n_branch} สาขา · เฉลี่ย ${x.avg_score}/${x.max_score} · ผ่าน ${x.n_pass}/${x.n_test} · ต่ำสุด ${Math.round(x.min_pct)}%</div></div>
+      <span class="pct" style="color:${colorFor(p)}">${p}%</span></div>
+      <div class="mdet" data-det="${esc(x.item_code)}" style="display:none"></div>`;
+  }).join('');
+  $$('#rpList .mrow').forEach(r=>r.onclick=()=>toggleMenu(r));
+}
+async function toggleMenu(row){
+  const code=row.dataset.menu; const det=$(`#rpList [data-det="${CSS.escape(code)}"]`);
+  const open=det.style.display!=='none';
+  if(open){ det.style.display='none'; row.classList.remove('open'); return; }
+  row.classList.add('open'); det.style.display='block';
+  if(det.dataset.loaded){ return; }
+  det.innerHTML='<div class="empty">กำลังโหลด…</div>';
+  const m=$('#rpMonth').value;
+  let d; try{ d=await api(`/api/admin/menu-detail?month=${m}&item_code=${encodeURIComponent(code)}`); }catch(e){ det.innerHTML=`<div class="empty">${esc(e.message)}</div>`; return; }
+  const bar=(label,p,right)=>`<div class="mbar"><div class="bl" title="${esc(label)}">${esc(label)}</div>
+    <div class="bt"><div class="bf" style="width:${p}%;background:${colorFor(p)}"></div></div><div class="bv">${right}</div></div>`;
+  let html='<div class="mini">รายหมวด / หัวข้อ (เฉลี่ยทุกครั้ง)</div>';
+  let lastGrp='';
+  d.by_criteria.forEach(c=>{ if(c.grp!==lastGrp){ html+=`<div class="grp-h">${esc(c.grp)}</div>`; lastGrp=c.grp; }
+    html+=bar(c.label,Math.round(c.avg_pct),`${c.avg_score}/${c.max_score}`); });
+  html+='<div class="mini">รายสาขา</div>';
+  d.by_branch.forEach(b=>html+=bar(b.shop_name,Math.round(b.avg_pct),`${Math.round(b.avg_pct)}% ·${b.n}`));
+  html+='<div class="mini">รายการทดสอบ ('+d.tests.length+')</div>';
+  html+=d.tests.map(t=>`<div class="row-item"><div class="nm">${esc(t.shop_name)} <span class="s">${(t.test_date||'').slice(0,10)} · ${esc(t.chef_name||'')}</span></div>
+    <span class="pct" style="color:${colorFor(Math.round(t.pct))};font-size:14px;width:auto">${t.total_score}/${t.max_score} (${Math.round(t.pct)}%)</span></div>`).join('');
+  det.innerHTML=html; det.dataset.loaded='1';
+}
+
 /* ---- nav / init ---- */
-function switchView(v){$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.v===v));$$('.view').forEach(s=>s.classList.toggle('active',s.id==='v-'+v));}
+function switchView(v){$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.v===v));$$('.view').forEach(s=>s.classList.toggle('active',s.id==='v-'+v));if(v==='report'&&!$('#rpMonth').value){fillRpMonths();}if(v==='report')loadReport();}
 function loadAll(){ loadMenuEnabled(); loadShops(); loadChefs(); loadCrit(); }
 function setTheme(t){document.documentElement.dataset.t=t;$('#themeBtn').textContent=t==='dark'?'☀️':'🌙';sessionStorage.setItem('ft_admin_theme',t);}
 
@@ -294,6 +369,7 @@ $('#menuSearchBtn').onclick=searchMenu;
 $('#menuSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchMenu();});
 $('#shopSearch').oninput=renderShops; $('#shopReload').onclick=loadShops;
 $('#chefAddBtn').onclick=addChef; $('#critAddBtn').onclick=addCrit;
+$('#rpMonth').onchange=loadReport; fillRpMonths();
 $('#logoutBtn').onclick=logout;
 $('#themeBtn').onclick=()=>setTheme(document.documentElement.dataset.t==='dark'?'light':'dark');
 setTheme(sessionStorage.getItem('ft_admin_theme')||'light');
