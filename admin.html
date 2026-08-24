@@ -396,12 +396,19 @@ async function exportReportXlsx(){
     dets.filter(Boolean).forEach(({x,d})=>(d.by_criteria||[]).forEach(c=>cr.push([x.menu_name,c.grp,c.label,+c.avg_score,+c.max_score,+c.avg_pct])));
     if(cr.length>1){const w=XLSX.utils.aoa_to_sheet(cr);w['!cols']=[{wch:34},{wch:20},{wch:22},{wch:11},{wch:8},{wch:9}];XLSX.utils.book_append_sheet(wb,w,'รายหมวดต่อเมนู');}
   }catch(e){}
-  // 4) รายการทดสอบทั้งหมด
+  // 4) รายการทดสอบทั้งหมด (+ comment รวม)
   try{
     const tests=await api(`/api/tests?month=${m}&limit=2000`);
-    const th=[['วันที่','สาขา','เมนู','ผู้ประเมิน','ผู้เข้าทดสอบ','คะแนน','เต็ม','%']];
-    (tests||[]).forEach(t=>th.push([(t.test_date||'').slice(0,10),t.shop_name,t.menu_name,t.chef_name,t.tester_name||'',t.total_score,t.max_score,Math.round(t.pct)]));
-    if(th.length>1){const w=XLSX.utils.aoa_to_sheet(th);w['!cols']=[{wch:12},{wch:22},{wch:32},{wch:18},{wch:16},{wch:8},{wch:7},{wch:6}];XLSX.utils.book_append_sheet(wb,w,'รายการทดสอบ');}
+    const th=[['วันที่','สาขา','เมนู','ผู้ประเมิน','ผู้เข้าทดสอบ','คะแนน','เต็ม','%','Comment รวม']];
+    (tests||[]).forEach(t=>th.push([(t.test_date||'').slice(0,10),t.shop_name,t.menu_name,t.chef_name,t.tester_name||'',t.total_score,t.max_score,Math.round(t.pct),t.comment||'']));
+    if(th.length>1){const w=XLSX.utils.aoa_to_sheet(th);w['!cols']=[{wch:12},{wch:22},{wch:32},{wch:18},{wch:16},{wch:8},{wch:7},{wch:6},{wch:40}];XLSX.utils.book_append_sheet(wb,w,'รายการทดสอบ');}
+  }catch(e){}
+  // 5) คะแนนรายหัวข้อ (รายบิล + หมายเหตุแต่ละหัวข้อ)
+  try{
+    const dr=await api(`/api/admin/detail-rows?month=${m}`);
+    const dh=[['วันที่','สาขา','เมนู','ผู้ประเมิน','หมวด','หัวข้อ','คะแนน','เต็ม','หมายเหตุ (หัวข้อ)','คะแนนรวมบิล','% บิล','Comment รวม']];
+    (dr.rows||[]).forEach(r=>dh.push([(r.test_date||'').slice(0,10),r.shop_name,r.menu_name,r.chef_name,r.grp,r.label,r.score,r.max_score,r.note||'',r.total_score,Math.round(r.pct),r.comment||'']));
+    if(dh.length>1){const w=XLSX.utils.aoa_to_sheet(dh);w['!cols']=[{wch:12},{wch:20},{wch:28},{wch:16},{wch:18},{wch:18},{wch:7},{wch:6},{wch:34},{wch:11},{wch:7},{wch:34}];XLSX.utils.book_append_sheet(wb,w,'คะแนนรายหัวข้อ');}
   }catch(e){}
   XLSX.writeFile(wb,`FoodTest_Summary_${m}.xlsx`);
   toast('ดาวน์โหลดแล้ว ✓');
