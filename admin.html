@@ -167,6 +167,14 @@ label.fl{display:block;font-size:12px;color:var(--sub);margin:0 0 4px 2px}
       <div id="rpKpi" class="rpkpi"></div>
     </div>
     <div class="card"><h3><span class="pip"></span>เมนู (เรียงคะแนนต่ำ → สูง)</h3><div id="rpList"><div class="empty">เลือกเดือน…</div></div></div>
+    <div class="card">
+      <h3><span class="pip"></span>🔀 เทียบเมนูเดียวกัน · ข้ามสาขา</h3>
+      <div class="searchbar">
+        <select class="inp" id="cmpMenu"><option value="">เลือกเมนู…</option></select>
+        <select class="inp" id="cmpRange" style="max-width:130px"><option value="6">6 เดือน</option><option value="12">12 เดือน</option><option value="3">3 เดือน</option></select>
+      </div>
+      <div id="cmpBody"><div class="empty">เลือกเมนูเพื่อเทียบคะแนนระหว่างสาขา</div></div>
+    </div>
   </section>
 </div>
 
@@ -398,8 +406,34 @@ async function exportReportXlsx(){
   XLSX.writeFile(wb,`FoodTest_Summary_${m}.xlsx`);
   toast('ดาวน์โหลดแล้ว ✓');
 }
+/* ---- เทียบเมนูเดียวกันข้ามสาขา ---- */
+async function fillCmpMenus(){
+  try{ const rows=await api('/api/admin/menus');
+    $('#cmpMenu').innerHTML='<option value="">เลือกเมนู…</option>'+rows.map(r=>`<option value="${esc(r.item_code)}">${esc(r.name)}</option>`).join('');
+  }catch(e){}
+}
+async function loadCompare(){
+  const code=$('#cmpMenu').value; const months=+$('#cmpRange').value||6;
+  if(!code){ $('#cmpBody').innerHTML='<div class="empty">เลือกเมนูเพื่อเทียบคะแนนระหว่างสาขา</div>'; return; }
+  $('#cmpBody').innerHTML='<div class="empty">กำลังโหลด…</div>';
+  let d; try{ d=await api(`/api/admin/menu-branches?item_code=${encodeURIComponent(code)}&months=${months}`); }catch(e){ $('#cmpBody').innerHTML=`<div class="empty">${esc(e.message)}</div>`; return; }
+  const b=d.branches||[];
+  if(!b.length){ $('#cmpBody').innerHTML='<div class="empty">ยังไม่มีข้อมูลการทดสอบเมนูนี้ในช่วงที่เลือก</div>'; return; }
+  const note = b.length<2 ? '<div class="empty" style="text-align:left;padding:6px 2px">เมนูนี้ทดสอบแค่ 1 สาขา — ยังเทียบข้ามสาขาไม่ได้</div>' : '';
+  const bars = b.map((x,i)=>{
+    const p=Math.round(x.avg_pct);
+    const tag = i===0&&b.length>1?' 🏆':(i===b.length-1&&b.length>1?' ⚠️':'');
+    return `<div class="mbar"><div class="bl" title="${esc(x.shop_name)}">${esc(x.shop_name)}${tag}</div>
+      <div class="bt"><div class="bf" style="width:${p}%;background:${colorFor(p)}"></div></div>
+      <div class="bv">${p}% <span style="color:var(--sub);font-weight:400">·${x.n}</span></div></div>`;
+  }).join('');
+  const best=b[0], worst=b[b.length-1];
+  const gap = b.length>1 ? `<div class="empty" style="text-align:left;padding:8px 2px;color:var(--sub)">ห่างสุด: ${esc(best.shop_name)} ${Math.round(best.avg_pct)}% ▸ ${esc(worst.shop_name)} ${Math.round(worst.avg_pct)}% (${Math.round(best.avg_pct-worst.avg_pct)} จุด)</div>` : '';
+  $('#cmpBody').innerHTML=`<div class="mini">${esc(d.menu_name)} · ${b.length} สาขา (${months} เดือน)</div>${note}${bars}${gap}`;
+}
+
 /* ---- nav / init ---- */
-function switchView(v){$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.v===v));$$('.view').forEach(s=>s.classList.toggle('active',s.id==='v-'+v));if(v==='report'&&!$('#rpMonth').value){fillRpMonths();}if(v==='report')loadReport();}
+function switchView(v){$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.v===v));$$('.view').forEach(s=>s.classList.toggle('active',s.id==='v-'+v));if(v==='report'&&!$('#rpMonth').value){fillRpMonths();}if(v==='report'){loadReport();if(!$('#cmpMenu').dataset.filled){fillCmpMenus();$('#cmpMenu').dataset.filled='1';}}}
 function loadAll(){ loadMenuEnabled(); loadShops(); loadChefs(); loadCrit(); }
 function setTheme(t){document.documentElement.dataset.t=t;$('#themeBtn').textContent=t==='dark'?'☀️':'🌙';sessionStorage.setItem('ft_admin_theme',t);}
 
@@ -413,6 +447,7 @@ $('#shopSearch').oninput=renderShops; $('#shopReload').onclick=loadShops;
 $('#chefAddBtn').onclick=addChef; $('#critAddBtn').onclick=addCrit;
 $('#rpMonth').onchange=loadReport; fillRpMonths();
 $('#rpExport').onclick=exportReportXlsx;
+$('#cmpMenu').onchange=loadCompare; $('#cmpRange').onchange=loadCompare;
 $('#logoutBtn').onclick=logout;
 $('#themeBtn').onclick=()=>setTheme(document.documentElement.dataset.t==='dark'?'light':'dark');
 setTheme(sessionStorage.getItem('ft_admin_theme')||'light');
