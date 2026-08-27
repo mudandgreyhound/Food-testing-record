@@ -163,7 +163,7 @@ label.fl{display:block;font-size:12px;color:var(--sub);margin:0 0 4px 2px}
   <section class="view" id="v-report">
     <div class="card">
       <h3><span class="pip"></span>สรุปการทดสอบรายเดือน · แยกเป็นเมนู</h3>
-      <div class="searchbar"><select class="inp" id="rpMonth"></select><button class="btn sm" id="rpExport">⬇ Excel</button></div>
+      <div class="searchbar"><select class="inp" id="rpMonth"></select><select class="inp" id="rpExpBranch" style="max-width:170px"><option value="">ทุกสาขา</option></select><button class="btn sm" id="rpExport">⬇ Excel</button><button class="btn sm ghost" id="rpExportFlat">⬇ ดิบ</button></div>
       <div id="rpKpi" class="rpkpi"></div>
     </div>
     <div class="card"><h3><span class="pip"></span>เมนู (เรียงคะแนนต่ำ → สูง)</h3><div id="rpList"><div class="empty">เลือกเดือน…</div></div></div>
@@ -370,7 +370,7 @@ async function toggleMenu(row){
   det.innerHTML=html; det.dataset.loaded='1';
 }
 
-async function exportReportXlsx(){
+async function exportFlatXlsx(){
   if(typeof XLSX==='undefined'){toast('โหลดไลบรารียังไม่เสร็จ ลองใหม่');return;}
   if(!rpData||!rpData.menus||!rpData.menus.length){toast('ยังไม่มีข้อมูลให้ export');return;}
   const m=rpData.month, k=rpData.kpi||{};
@@ -439,8 +439,27 @@ async function loadCompare(){
   $('#cmpBody').innerHTML=`<div class="mini">${esc(d.menu_name)} · ${b.length} สาขา (${months} เดือน)</div>${note}${bars}${gap}`;
 }
 
+async function fillExpBranches(){
+  try{ const rows=await api('/api/admin/branches?limit=2000');
+    $('#rpExpBranch').innerHTML='<option value="">ทุกสาขา</option>'+rows.map(r=>`<option value="${esc(r.shop_code)}">${esc(r.name)}</option>`).join('');
+  }catch(e){}
+}
+async function exportReportXlsx(){
+  const m=$('#rpMonth').value; const sc=$('#rpExpBranch').value;
+  if(!m){toast('เลือกเดือนก่อน');return;}
+  toast('กำลังสร้างไฟล์…');
+  try{
+    const r=await fetch(`${API}/api/admin/export?month=${m}${sc?'&shop_code='+encodeURIComponent(sc):''}`,
+      {headers:{'X-API-Key':KEY,'X-Chef-Token':TOKEN}});
+    if(!r.ok){ let d; try{d=(await r.json()).detail;}catch(e){d='HTTP '+r.status;} throw new Error(d); }
+    const blob=await r.blob(); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`FoodTest_${m}${sc?'_'+sc:'_all'}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast('ดาวน์โหลดแล้ว ✓');
+  }catch(e){ toast('Export ไม่สำเร็จ: '+e.message); }
+}
 /* ---- nav / init ---- */
-function switchView(v){$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.v===v));$$('.view').forEach(s=>s.classList.toggle('active',s.id==='v-'+v));if(v==='report'&&!$('#rpMonth').value){fillRpMonths();}if(v==='report'){loadReport();if(!$('#cmpMenu').dataset.filled){fillCmpMenus();$('#cmpMenu').dataset.filled='1';}}}
+function switchView(v){$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.v===v));$$('.view').forEach(s=>s.classList.toggle('active',s.id==='v-'+v));if(v==='report'&&!$('#rpMonth').value){fillRpMonths();}if(v==='report'){loadReport();if(!$('#cmpMenu').dataset.filled){fillCmpMenus();fillExpBranches();$('#cmpMenu').dataset.filled='1';}}}
 function loadAll(){ loadMenuEnabled(); loadShops(); loadChefs(); loadCrit(); }
 function setTheme(t){document.documentElement.dataset.t=t;$('#themeBtn').textContent=t==='dark'?'☀️':'🌙';sessionStorage.setItem('ft_admin_theme',t);}
 
@@ -453,7 +472,7 @@ $('#menuSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchMenu();
 $('#shopSearch').oninput=renderShops; $('#shopReload').onclick=loadShops;
 $('#chefAddBtn').onclick=addChef; $('#critAddBtn').onclick=addCrit;
 $('#rpMonth').onchange=loadReport; fillRpMonths();
-$('#rpExport').onclick=exportReportXlsx;
+$('#rpExport').onclick=exportReportXlsx; $('#rpExportFlat').onclick=exportFlatXlsx;
 $('#cmpMenu').onchange=loadCompare; $('#cmpRange').onchange=loadCompare;
 $('#logoutBtn').onclick=logout;
 $('#themeBtn').onclick=()=>setTheme(document.documentElement.dataset.t==='dark'?'light':'dark');
