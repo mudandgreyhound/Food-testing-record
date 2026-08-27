@@ -120,7 +120,8 @@ label.fl{display:block;font-size:12px;color:var(--sub);margin:0 0 4px 2px}
   <section class="view" id="v-shop">
     <div class="card">
       <h3><span class="pip"></span>เปิด–ปิด สาขา</h3>
-      <div class="searchbar"><input class="inp" id="shopSearch" placeholder="ค้นสาขา"><button class="btn sm ghost" id="shopReload">รีเฟรช</button></div>
+      <div class="searchbar"><input class="inp" id="shopSearch" placeholder="ค้นสาขา"><select class="inp" id="shopStatus" style="max-width:120px"><option value="">ทั้งหมด</option><option value="on">เปิด</option><option value="off">ปิด</option></select><button class="btn sm ghost" id="shopReload">รีเฟรช</button></div>
+      <div id="shopCount" style="font-size:12.5px;color:var(--sub);margin:-4px 0 8px 2px"></div>
       <div id="shopList"><div class="empty">กำลังโหลด…</div></div>
     </div>
   </section>
@@ -242,7 +243,11 @@ let shopCache=[];
 async function loadShops(){ shopCache=await api('/api/admin/branches?limit=2000'); renderShops(); }
 function renderShops(){
   const q=$('#shopSearch').value.trim().toLowerCase();
-  const rows=shopCache.filter(s=>!q||(s.name+s.shop_code).toLowerCase().includes(q));
+  const st=$('#shopStatus').value;
+  const rows=shopCache.filter(s=>(!q||(s.name+s.shop_code).toLowerCase().includes(q))
+    && (!st || (st==='on'?s.enabled:!s.enabled)));
+  const onCount=shopCache.filter(s=>s.enabled).length;
+  $('#shopCount').textContent=`เปิด ${onCount} · ปิด ${shopCache.length-onCount} · ทั้งหมด ${shopCache.length}`;
   $('#shopList').innerHTML = rows.length? rows.map(s=>`
     <div class="row-item"><div class="nm">${esc(s.name)} <span class="s">${esc(s.shop_code)}</span></div>
       <label class="sw"><input type="checkbox" data-shop="${esc(s.shop_code)}" ${s.enabled?'checked':''}><span></span></label></div>`).join('')
@@ -250,6 +255,8 @@ function renderShops(){
   $$('#shopList [data-shop]').forEach(c=>c.onchange=async()=>{
     try{ await api('/api/admin/branches/toggle',{method:'POST',body:{code:c.dataset.shop,enabled:c.checked?1:0}});
       const it=shopCache.find(x=>x.shop_code===c.dataset.shop); if(it) it.enabled=c.checked?1:0; toast('อัปเดตแล้ว');
+      $('#shopCount').textContent=(()=>{const on=shopCache.filter(s=>s.enabled).length;return `เปิด ${on} · ปิด ${shopCache.length-on} · ทั้งหมด ${shopCache.length}`;})();
+      if(st) renderShops();
     }catch(e){ c.checked=!c.checked; toast('ผิดพลาด: '+e.message); }
   });
 }
@@ -440,8 +447,8 @@ async function loadCompare(){
 }
 
 async function fillExpBranches(){
-  try{ const rows=await api('/api/admin/branches?limit=2000');
-    $('#rpExpBranch').innerHTML='<option value="">ทุกสาขา</option>'+rows.map(r=>`<option value="${esc(r.shop_code)}">${esc(r.name)}</option>`).join('');
+  try{ const rows=await api('/api/branches?limit=2000');   // เฉพาะสาขาที่เปิด
+    $('#rpExpBranch').innerHTML='<option value="">ทุกสาขา (ที่มีข้อมูล)</option>'+rows.map(r=>`<option value="${esc(r.shop_code)}">${esc(r.name)}</option>`).join('');
   }catch(e){}
 }
 async function exportReportXlsx(){
@@ -469,7 +476,7 @@ $$('.tab').forEach(t=>t.onclick=()=>switchView(t.dataset.v));
 $('#menuSearchBtn').onclick=searchMenu;
 let _msT; $('#menuSearch').addEventListener('input',()=>{ clearTimeout(_msT); _msT=setTimeout(searchMenu,300); });
 $('#menuSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchMenu();});
-$('#shopSearch').oninput=renderShops; $('#shopReload').onclick=loadShops;
+$('#shopSearch').oninput=renderShops; $('#shopStatus').onchange=renderShops; $('#shopReload').onclick=loadShops;
 $('#chefAddBtn').onclick=addChef; $('#critAddBtn').onclick=addCrit;
 $('#rpMonth').onchange=loadReport; fillRpMonths();
 $('#rpExport').onclick=exportReportXlsx; $('#rpExportFlat').onclick=exportFlatXlsx;
