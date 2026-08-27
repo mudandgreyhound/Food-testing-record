@@ -115,9 +115,11 @@ textarea.inp{resize:vertical;min-height:70px}
 .rec:active{transform:scale(.99)}
 .rec .ico{width:42px;height:42px;border-radius:10px;background:var(--accent-soft);display:grid;
   place-items:center;font-size:19px;flex:0 0 auto}
+.rec .thumb{width:52px;height:52px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:var(--accent-soft)}
 .rec .meta{flex:1;min-width:0}
 .rec .meta .t{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rec .meta .s{font-size:12px;color:var(--sub);margin-top:1px}
+.rec .meta .tag{display:inline-block;margin-top:5px;font-size:11px;font-weight:600;padding:2px 9px;border-radius:50px}
 .rec .pillscore{font-weight:700;font-size:15px;text-align:right}
 .rec .pillscore .p{font-size:11px;font-weight:500;color:var(--sub)}
 .filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
@@ -444,7 +446,7 @@ async function loadRecords(){
       const rows = await api('/api/tests?limit=500');
       records = rows.map(r=>({ id:r.test_uid, date:(r.test_date||'').slice(0,10), menu:r.menu_name,
         branch:r.shop_name, tester:r.tester_name, eval:r.chef_name,
-        total:r.total_score, pct:Math.round(r.pct), comment:r.comment, _api:true }));
+        total:r.total_score, max:r.max_score, pct:Math.round(r.pct), thumb:r.thumb, comment:r.comment, _api:true }));
     }catch(e){ records=[]; toast('โหลดข้อมูลไม่สำเร็จ: '+e.message); }
   }else{
     records = (await Store.get(K_REC))||[];
@@ -852,12 +854,17 @@ function renderList(){
     (!q||(r.menu+r.tester+r.eval).toLowerCase().includes(q)));
   const el=$('#recList');
   if(!rows.length){el.innerHTML=`<div class="empty"><div class="em">📋</div>ยังไม่มีรายการ${records.length?'ตามตัวกรอง':''}</div>`;return;}
-  el.innerHTML=rows.map(r=>`<div class="rec" data-id="${r.id}">
-    <div class="ico">🍽️</div>
+  el.innerHTML=rows.map(r=>{
+    const mx=r.max||MAX; const p=Math.round(r.pct);
+    const thumb=(USE_API&&r.thumb)?`<img class="thumb" src="${API}/uploads/${r.thumb}" loading="lazy" alt="">`:`<div class="ico">🍽️</div>`;
+    const stat=p>=90?'ดีเยี่ยม':p>=80?'ผ่าน':'ต้องปรับปรุง';
+    return `<div class="rec" data-id="${r.id}">
+    ${thumb}
     <div class="meta"><div class="t">${esc(r.menu)}</div>
-      <div class="s">${esc(r.branch)} · ${fmtThaiDate(r.date)}${r.tester?' · '+esc(r.tester):''}</div></div>
-    <div class="pillscore" style="color:${colorFor(r.pct)}">${r.total}/80<div class="p">${r.pct}%</div></div>
-  </div>`).join('');
+      <div class="s">${esc(r.branch)} · ${fmtThaiDate(r.date)}${r.tester?' · '+esc(r.tester):''}</div>
+      <div class="tag" style="color:${colorFor(p)};background:${colorFor(p)}22">${stat}</div></div>
+    <div class="pillscore" style="color:${colorFor(p)}">${r.total}/${mx}<div class="p">${p}%</div></div>
+  </div>`;}).join('');
   $$('#recList .rec').forEach(c=>c.onclick=()=>openDetail(c.dataset.id));
 }
 function esc(s){return(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
