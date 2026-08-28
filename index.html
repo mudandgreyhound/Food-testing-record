@@ -341,13 +341,13 @@ textarea.inp{resize:vertical;min-height:70px}
     </div>
     <div class="filters">
       <select class="inp" id="sum_month"></select>
-      <button class="btn ghost sm" id="csvBtn">⬇ CSV</button>
+      <button class="btn ghost sm" id="csvBtn">⬇ Excel</button>
     </div>
     <div id="sumBody"></div>
   </section>
 
   <div class="note">
-    Designed & Developed by IT Business Intelligence Team © 2026<br>
+    💾 ข้อมูลถูกเก็บไว้ในเครื่องนี้ (เบราว์เซอร์) ใช้งานได้ทันทีโดยไม่ต้องมีเซิร์ฟเวอร์<br>
     <button class="btn ghost sm" id="backupBtn" style="margin-top:8px">📦 Backup ข้อมูล</button>
     <button class="btn ghost sm" id="restoreBtn" style="margin-top:8px">♻️ Restore</button>
     <input type="file" id="restoreFile" accept="application/json" hidden>
@@ -961,8 +961,21 @@ function renderSummary(){
 }
 
 /* ---------- CSV export ---------- */
+async function exportSummaryXlsx(){
+  const m=$('#sum_month').value; const months=+($('#sum_range')?.value)||6;
+  if(!m){toast('เลือกเดือนก่อน');return;}
+  toast('กำลังสร้างไฟล์…');
+  try{
+    const r=await fetch(`${API}/api/summary-export?month=${m}&months=${months}`,{headers:{'X-API-Key':KEY}});
+    if(!r.ok){ let d; try{d=(await r.json()).detail;}catch(e){d='HTTP '+r.status;} throw new Error(d); }
+    const blob=await r.blob(); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`FoodTest_Summary_${m}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast('ดาวน์โหลดแล้ว ✓');
+  }catch(e){ toast('Export ไม่สำเร็จ: '+e.message); }
+}
 function exportCSV(){
-  if(USE_API){ toast('โหมด API: ส่งออก CSV ผ่านหน้าสรุปฝั่งเซิร์ฟเวอร์ (เร็ว ๆ นี้)'); return; }
+  if(USE_API){ return exportSummaryXlsx(); }
   const m=$('#sum_month').value;const rows=records.filter(r=>monthKey(r.date)===m);
   if(!rows.length){toast('ไม่มีข้อมูลให้ส่งออก');return;}
   const head=['วันที่','สาขา','เมนู','ผู้เข้าทดสอบ','ผู้ประเมิน',...ALL_ITEMS.map(i=>i[1]),'รวม','เปอร์เซ็นต์','หมายเหตุรายหัวข้อ','Comments'];
