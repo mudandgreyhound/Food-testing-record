@@ -406,16 +406,16 @@ async function exportFlatXlsx(){
   // 4) รายการทดสอบทั้งหมด (+ comment รวม)
   try{
     const tests=await api(`/api/tests?month=${m}&limit=2000`);
-    const th=[['วันที่','สาขา','เมนู','ผู้ประเมิน','ผู้เข้าทดสอบ','คะแนน','เต็ม','%','Comment รวม']];
-    (tests||[]).forEach(t=>th.push([(t.test_date||'').slice(0,10),t.shop_name,t.menu_name,t.chef_name,t.tester_name||'',t.total_score,t.max_score,Math.round(t.pct),t.comment||'']));
-    if(th.length>1){const w=XLSX.utils.aoa_to_sheet(th);w['!cols']=[{wch:12},{wch:22},{wch:32},{wch:18},{wch:16},{wch:8},{wch:7},{wch:6},{wch:40}];XLSX.utils.book_append_sheet(wb,w,'รายการทดสอบ');}
+    const th=[['วันที่','รอบ','สาขา','เมนู','ผู้ประเมิน','ผู้เข้าทดสอบ','คะแนน','เต็ม','%','Comment รวม']];
+    (tests||[]).forEach(t=>th.push([(t.test_date||'').slice(0,10),t.round_no||1,t.shop_name,t.menu_name,t.chef_name,t.tester_name||'',t.total_score,t.max_score,Math.round(t.pct),t.comment||'']));
+    if(th.length>1){const w=XLSX.utils.aoa_to_sheet(th);w['!cols']=[{wch:12},{wch:6},{wch:22},{wch:32},{wch:18},{wch:16},{wch:8},{wch:7},{wch:6},{wch:40}];XLSX.utils.book_append_sheet(wb,w,'รายการทดสอบ');}
   }catch(e){}
   // 5) คะแนนรายหัวข้อ (รายบิล + หมายเหตุแต่ละหัวข้อ)
   try{
     const dr=await api(`/api/admin/detail-rows?month=${m}`);
-    const dh=[['วันที่','สาขา','เมนู','ผู้ประเมิน','หมวด','หัวข้อ','คะแนน','เต็ม','หมายเหตุ (หัวข้อ)','คะแนนรวมบิล','% บิล','Comment รวม']];
-    (dr.rows||[]).forEach(r=>dh.push([(r.test_date||'').slice(0,10),r.shop_name,r.menu_name,r.chef_name,r.grp,r.label,r.score,r.max_score,r.note||'',r.total_score,Math.round(r.pct),r.comment||'']));
-    if(dh.length>1){const w=XLSX.utils.aoa_to_sheet(dh);w['!cols']=[{wch:12},{wch:20},{wch:28},{wch:16},{wch:18},{wch:18},{wch:7},{wch:6},{wch:34},{wch:11},{wch:7},{wch:34}];XLSX.utils.book_append_sheet(wb,w,'คะแนนรายหัวข้อ');}
+    const dh=[['วันที่','รอบ','สาขา','เมนู','ผู้ประเมิน','หมวด','หัวข้อ','คะแนน','เต็ม','หมายเหตุ (หัวข้อ)','คะแนนรวมบิล','% บิล','Comment รวม']];
+    (dr.rows||[]).forEach(r=>dh.push([(r.test_date||'').slice(0,10),r.round_no||1,r.shop_name,r.menu_name,r.chef_name,r.grp,r.label,r.score,r.max_score,r.note||'',r.total_score,Math.round(r.pct),r.comment||'']));
+    if(dh.length>1){const w=XLSX.utils.aoa_to_sheet(dh);w['!cols']=[{wch:12},{wch:6},{wch:20},{wch:28},{wch:16},{wch:18},{wch:18},{wch:7},{wch:6},{wch:34},{wch:11},{wch:7},{wch:34}];XLSX.utils.book_append_sheet(wb,w,'คะแนนรายหัวข้อ');}
   }catch(e){}
   XLSX.writeFile(wb,`FoodTest_Summary_${m}.xlsx`);
   toast('ดาวน์โหลดแล้ว ✓');
